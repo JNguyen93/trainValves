@@ -30,13 +30,24 @@ int barCounter0 = 23;
 int barCounter1 = 23;
 int enCounter0 = 0;
 int enCounter1 = 0;
+int solCounter = 0;
+int winNumber = 20;
+bool colorChange0;
+bool colorChange1;
 bool flag0;
 long long flag0Set;
 bool flag1;
 long long flag1Set;
-int penaltyDelay = 2000;
+int penaltyDelay = 3500;
 bool penalty0 = false;
 bool penalty1 = false;
+bool win = false;
+bool error0;
+bool error1;
+long long errorSet;
+bool errorOn = false;
+bool added0 = false;
+bool added1 = false;
 
 int off[3] = {0, 0, 0};
 int red[3] = {255, 0 , 0};
@@ -46,7 +57,7 @@ int yellow[3] = {255, 255, 0};
 int purple[3] = {255, 0, 255};
 int aqua[3] = {0, 255, 255};
 int test[3] = {255, 255, 255};
-int* colors[5] = {purple, blue, green, yellow, red};
+int* colors[5] = {purple, red, blue, yellow, aqua};
 
 Encoder encoder0(2, 4);
 Gauge gauge0 = Gauge(gauge0pin);
@@ -95,45 +106,83 @@ void loop() {
 
   //barFlicker(bar0, barCounter0);
   //Serial.println("Initiating Valve Change");
-  valve0.randomChange();
-  valve1.randomChange();
-  valve0.randomColor();
-  valve1.randomColor();
-  //Serial.print("Encoder0 Value: ");
-  readEncoder(encoder0, valve0, enCounter0);
-  //Serial.print("Encoder1 Value: ");
-  readEncoder(encoder1, valve1, enCounter1);
-
-  setColor(leftLED, colors[valve0.getRange()]);
-  setColor(rightLED, colors[valve1.getRange()]);
+  if(!win){
+    valve0.randomChange();
+    valve1.randomChange();
+    colorChange0 = valve0.randomColor();
+    colorChange1 = valve1.randomColor();
+    //Serial.print("Encoder0 Value: ");
+    readEncoder(encoder0, valve0, enCounter0);
+    //Serial.print("Encoder1 Value: ");
+    readEncoder(encoder1, valve1, enCounter1);
   
-  if (valve0.gauge.gaugePosition >= valve0.getRangeMin() && valve0.gauge.gaugePosition <= valve0.getRangeMax()) {
-    flag0 = false;
-  }
-  else {
-    if(!flag0){
-      flag0Set = millis();
+    setColor(leftLED, colors[valve0.getRange()]);
+    setColor(rightLED, colors[valve1.getRange()]);
+
+    if(colorChange0){
+      added0 = false;
     }
-    flag0 = true;
-  }
-
-  if (valve1.gauge.gaugePosition >= valve1.getRangeMin() && valve1.gauge.gaugePosition <= valve1.getRangeMax()) {
-    flag1 = false;
-  }
-  else {
-    if(!flag1){
-      flag1Set = millis();
+    if(colorChange1){
+      added1 = false;
     }
-    flag1 = true;
+    if (valve0.gauge.gaugePosition >= valve0.getRangeMin() && valve0.gauge.gaugePosition <= valve0.getRangeMax()) {
+      flag0 = false;
+      if(!added0){
+        solCounter++;
+        added0 = true;
+      }
+    }
+    else {
+      if(colorChange0){
+        error0 = true;
+      }
+      if(!flag0){
+        flag0Set = millis();
+      }
+      flag0 = true;
+    }
+  
+    if (valve1.gauge.gaugePosition >= valve1.getRangeMin() && valve1.gauge.gaugePosition <= valve1.getRangeMax()) {
+      if(!added1){
+        solCounter++;
+        added1 = true;
+      }
+      flag1 = false;
+    }
+    else {
+      if(colorChange1){
+        error1 = true;
+      }
+      if(!flag1){
+        flag1Set = millis();
+      }
+      flag1 = true;
+    }
+  
+    penaltyCheck(flag0, flag0Set, penalty0);
+    penaltyCheck(flag1, flag1Set, penalty1);
+    //penaltyCheck(bar0, barCounter0, flag0, flag0Set, penalty0);
+    //penaltyCheck(bar1, barCounter1, flag1, flag1Set, penalty1);
+  
+    if(penalty0 && penalty1){
+      shutdownPanel();
+    }
+
+    //Serial.print("Counter: ");
+    //Serial.println(solCounter);
+    
+    if(solCounter >= winNumber){
+      win = true;
+      solCounter = 0;
+    }
   }
-
-  penaltyCheck(flag0, flag0Set, penalty0);
-  penaltyCheck(flag1, flag1Set, penalty1);
-  //penaltyCheck(bar0, barCounter0, flag0, flag0Set, penalty0);
-  //penaltyCheck(bar1, barCounter1, flag1, flag1Set, penalty1);
-
-  if(penalty0 && penalty1){
-    shutdownPanel();
+  else{
+    setColor(leftLED, green);
+    setColor(rightLED, green);
+    digitalWrite(relay, HIGH);
+    digitalWrite(buttonLED, LOW);
+    delay(600000);
+    win = false;
   }
 }
 
@@ -207,8 +256,9 @@ void barFlicker(Adafruit_24bargraph& bar, int& counter){
 void penaltyCheck(bool& flag, long long& flagSet, bool& penalty){
   if(millis() - flagSet >= penaltyDelay && flag){
     penalty = true;
+    solCounter = 0;
   }
-  else if (penalty && !flag){
+  else{
     //penalty = false;
   }
 }
